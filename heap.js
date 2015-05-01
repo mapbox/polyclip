@@ -11,6 +11,7 @@ function Heap(data, compare) {
 }
 
 Heap.prototype = {
+
     push: function (item) {
         this.data.push(item);
         this.length++;
@@ -41,7 +42,7 @@ Heap.prototype = {
     _bubbleDown: function (pos) {
         var data = this.data,
             compare = this.compare,
-            len = data.length;
+            len = this.length;
 
         while (true) {
             var left = 2 * pos + 1,
@@ -66,5 +67,5 @@ function swap(data, i, j) {
 }
 
 function defaultCompare(a, b) {
-    return a - b;
+    return a < b ? -1 : a > b ? 1 : 0;
 }
