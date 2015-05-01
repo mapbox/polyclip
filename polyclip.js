@@ -1,7 +1,9 @@
 'use strict';
 
 var Heap = require('./heap');
-var BSArray = require('./bsarray');
+var DebugViz = require('./viz');
+
+var viz = new DebugViz('canvas');
 
 module.exports = clip;
 
@@ -16,63 +18,106 @@ function clip(subject, clipping) {
     for (k = 0; k < subject.length; k++) addToEvents(events, subject[k], true);
     for (k = 0; k < clipping.length; k++) addToEvents(events, clipping[k], false);
 
+    viz.scale([subject, clipping]);
+    viz.poly(subject, 'transparent', 'rgba(255,0,0,0.05)');
+    viz.poly(clipping, 'transparent', 'rgba(0,255,0,0.05)');
+
     var queue = new Heap(events, compareEvent),
-        edgeTable = new BSArray(compareEdge);
+        edgeList = null;
+
+    var k = 0;
 
     while (queue.length) {
         e = queue.pop();
 
-        if (e.isLeft) {
-            pos = edgeTable.insert(e);
-        } else {
-            // if (e.other.p[0] === 100 && e.other.p[1] === 10 && e.p[0] === 200 && e.p[1] === 110) debugger;
-            pos = edgeTable.find(e.other);
-        }
+        // viz.clear();
+        // viz.poly([subject, clipping], 'gray');
+        // viz.vertical(e.p[0], 'yellow');
 
-        prev = pos ? edgeTable.items[pos - 1] : null;
-        next = pos < edgeTable.items.length - 1 ? edgeTable.items[pos + 1] : null;
+        // var node = edgeList;
+        // while (node) {
+        //     viz.poly([node.p, node.other.p], 'red');
+        //     node = node.next;
+        // }
+        // debugger;
+
+        k++;
 
         if (e.isLeft) {
+            edgeList = edgeListInsert(edgeList, e);
+
             // console.log('opening', e.p.join(','), e.other.p.join(','));
 
-            // console.log(edgeTable.items.map(function (e) {
-            //     return e.p.join(',') + ' to ' + e.other.p.join(',');
-            // }));
-            // console.log('');
+            setInsideFlag(e, e.prev);
 
-            // if (prev) console.log('prev', prev.p.join(',') + ' to ' + prev.other.p.join(','));
-            setInsideFlag(e, prev);
+            // viz.poly([e.p, e.other.p], 'red');
 
-            if (next) handleIntersections(queue, e, next);
-            if (prev) handleIntersections(queue, e, prev);
+            // if (e.prev) viz.poly([e.prev.p, e.prev.other.p], 'red');
+            // if (e.next) viz.poly([e.next.p, e.next.other.p], 'red');
+            // debugger;
+
+            if (e.next) handleIntersections(queue, e, e.next);
+            if (e.prev) handleIntersections(queue, e, e.prev);
 
         } else {
+            e = e.other;
+
             // console.log('closing', e.other.p.join(','), e.p.join(','), e.other.isInside ? 'inside' : 'outside');
-            if (e.other.isInside) intersection.push([e.p, e.other.p]);
-            else union.push([e.p, e.other.p]);
+            if (e.isInside) {
+                intersection.push([e.p, e.other.p]);
+                // console.log(e.p.id, e.other.p.id);
 
-            // console.log(edgeTable.items.map(function (e) {
-            //     return e.p.join(',') + ' to ' + e.other.p.join(',');
-            // }));
+            } else union.push([e.p, e.other.p]);
 
-            edgeTable.removeAtIndex(pos);
+            edgeList = edgeListRemove(edgeList, e);
 
-            // console.log(edgeTable.items.map(function (e) {
-            //     return e.p.join(',') + ' to ' + e.other.p.join(',');
-            // }));
-            // console.log('');
-
-            if (prev && next) handleIntersections(queue, prev, next);
+            if (e.prev && e.next) handleIntersections(queue, e.prev, e.next);
         }
     }
 
-    // console.log(intersection);
-    // console.log(union);
+    // console.log(k);
+
+    viz.poly(intersection, 'red');
+    viz.poly(union, 'blue');
 }
+
+function edgeListInsert(edgeList, e) {
+    var next, prev;
+
+    if (!edgeList) edgeList = e;
+    else {
+        next = edgeList;
+        while (next && compareEdge(e, next) > 0) {
+            prev = next;
+            next = next.next;
+        }
+        if (prev) {
+            prev.next = e;
+            e.prev = prev;
+        } else edgeList = e;
+
+        e.next = next;
+        if (next) next.prev = e;
+    }
+    return edgeList;
+}
+
+function edgeListRemove(edgeList, e) {
+    if (e.prev) e.prev.next = e.next;
+    else edgeList = e.next;
+
+    if (e.next) e.next.prev = e.prev;
+
+    return edgeList;
+}
+
+var id = 0;
 
 function addToEvents(events, ring, isSubject) {
     var i, j, len, e1, e2;
     for (i = 0, len = ring.length, j = len - 1; i < len; j = i++) {
+
+        if (equals(ring[i], ring[j])) continue;
 
         e1 = sweepEvent(ring[i], isSubject);
         e2 = sweepEvent(ring[j], isSubject);
@@ -102,30 +147,49 @@ function setInsideFlag(e, e0) {
 }
 
 function handleIntersections(queue, e1, e2) {
-    var p1 = e1.p,
-        p1b = e1.other.p,
-        p2 = e2.p,
-        p2b = e2.other.p;
+    var p0 = e1.p,
+        p0b = e1.other.p,
+        p1 = e2.p,
+        p1b = e2.other.p;
 
-    // nothing to do if endpoints match but edges don't overlap
-    if (p1b === p2 || p2b === p1) return;
+    var ex = p1[0] - p0[0],
+        ey = p1[1] - p0[1],
+        d0x = p0b[0] - p0[0],
+        d0y = p0b[1] - p0[1],
+        d1x = p1b[0] - p1[0],
+        d1y = p1b[1] - p1[1],
+        cross = d0x * d1y - d0y * d1x,
+        sqrLen0 = d0x * d0x + d0y * d0y,
+        sqrLen1 = d1x * d1x + d1y * d1y,
+        p;
 
-    // console.log('intersecting', p1.join(','), p1b.join(','), p2.join(','), p2b.join(','));
+    if (cross * cross > sqrEpsilon * sqrLen0 * sqrLen1) {
+        // lines are not parallel
+        var s = (ex * d1y - ey * d1x) / cross;
+        if (s < 0 || s > 1) return;
 
-    var p = intersectEdges(p1, p1b, p2, p2b);
+        var t = (ex * d0y - ey * d0x) / cross;
+        if (t < 0 || t > 1) return;
 
-    // no intersections
-    if (!p) return;
+        p = [p0[0] + s * d0x, p0[1] + s * d0y];
 
-    // console.log('found intersection', p);
+        if (!equals(p, p0) && !equals(p, p0b)) subdivideEdge(queue, e1, p);
+        if (!equals(p, p1) && !equals(p, p1b)) subdivideEdge(queue, e2, p);
 
-    if (!equals(p, p1) && !equals(p, p1b)) subdivideEdge(queue, e1, p);
-    if (!equals(p, p2) && !equals(p, p2b)) subdivideEdge(queue, e2, p);
+    }
 
-    // TODO overlap
+    // lines are parallel
+    var sqrLenE = ex * ex + ey * ey;
+    cross = ex * d0y - ey * d0x;
+    if (cross * cross > sqrEpsilon * sqrLen0 * sqrLenE) return;
+
+    // lines overlap
+    // TODO
 }
 
 function subdivideEdge(queue, e, p) {
+    // console.count('subdivide');
+
     var e1 = sweepEvent(p, e.isSubject),
         e2 = sweepEvent(p, e.isSubject),
         e3 = e.other;
@@ -147,39 +211,10 @@ function equals(a, b) {
     return dx * dx + dy * dy < sqrEpsilon;
 }
 
-function intersectEdges(p0, p0b, p1, p1b) {
-    var ex = p1[0] - p0[0],
-        ey = p1[1] - p0[1],
-        d0x = p0b[0] - p0[0],
-        d0y = p0b[1] - p0[1],
-        d1x = p1b[0] - p1[0],
-        d1y = p1b[1] - p1[1],
-        cross = d0x * d1y - d0y * d1x,
-        sqrLen0 = d0x * d0x + d0y * d0y,
-        sqrLen1 = d1x * d1x + d1y * d1y;
-
-    if (cross * cross > sqrEpsilon * sqrLen0 * sqrLen1) {
-        // lines are not parallel
-        var s = (ex * d1y - ey * d1x) / cross;
-        if (s < 0 || s > 1) return false;
-
-        var t = (ex * d0y - ey * d0x) / cross;
-        if (t < 0 || t > 1) return false;
-
-        return [p0[0] + s * d0x, p0[1] + s * d0y];
-    }
-
-    // lines are parallel
-    var sqrLenE = ex * ex + ey * ey;
-    cross = ex * d0y - ey * d0x;
-    if (cross * cross > sqrEpsilon * sqrLen0 * sqrLenE) return false;
-
-    // lines overlap
-    // TODO
-    return false;
-}
+var id = 1;
 
 function sweepEvent(p, isSubject) {
+    // p.id = p.id || id++;
     return {
         p: p,
         other: null,
@@ -187,7 +222,9 @@ function sweepEvent(p, isSubject) {
         isSubject: isSubject,
         isInOut: false,
         isInside: false,
-        type: null
+        type: null,
+        prev: null,
+        next: null
     };
 }
 
@@ -200,7 +237,7 @@ function compareEvent(a, b) {
 
     if (a.isLeft !== b.isLeft) return a.isLeft ? 1 : -1;
 
-    return -below(a, b.other.p);
+    return below(a, b.other.p);
 }
 
 function below(e, p) {
@@ -221,11 +258,6 @@ function compareEdge(a, b) {
     return -below(b, a.p);
 }
 
-function edgeY(a, b, x) {
-    if (b[0] - a[0] === 0) return Math.min(a[1], b[1]);
-    return (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0]) + a[1];
-}
-
 function area(a, b, c) {
     var acx = a[0] - c[0],
         bcx = b[0] - c[0],
@@ -234,12 +266,20 @@ function area(a, b, c) {
     return acx * bcy - acy * bcx;
 }
 
+function randomRing(N) {
+    var ring = [];
+    for (var i = 0; i < N; i++) {
+        ring.push([Math.random(), Math.random()]);
+    }
+    return ring;
+}
+
 console.time('clip');
 
-for (var i = 0; i < 20000; i++)
+// for (var i = 0; i < 20000; i++)
 clip(
-    [[[0, 0],[100,100],[200,0]]],
-    [[[100, 10],[200,110],[300,10]]]
+    [randomRing(100)],
+    [randomRing(100)]
 );
 
 console.timeEnd('clip');
