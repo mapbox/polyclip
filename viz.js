@@ -84,6 +84,7 @@ DebugViz.prototype = {
 
     _extendBBox: function (points) {
         var bbox = this._bbox;
+        if (!points.length) return;
         if (Array.isArray(points[0])) {
             for (var i = 0; i < points.length; i++) this._extendBBox(points[i]);
         } else {
