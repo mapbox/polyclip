@@ -102,20 +102,20 @@ function addToEvents(events, ring, isSubject) {
 function setFlags(e, e0, type) {
     if (!e0) {
         e.inOut = false;
-        e.otherInOut = true;
+        e.inOutOther = true;
 
     } else if (e.subject === e0.subject) {
         e.inOut = !e0.inOut;
-        e.otherInOut = e0.otherInOut;
+        e.inOutOther = e0.inOutOther;
 
     } else {
-        e.inOut = !e0.otherInOut;
-        e.otherInOut = e0.inOut;
+        e.inOut = !e0.inOutOther;
+        e.inOutOther = e0.inOut;
     }
 
     e.inResult =
-        type === clip.INTERSECTION ? !e.otherInOut :
-        type === clip.UNION ? e.otherInOut : false;
+        type === clip.INTERSECTION ? !e.inOutOther :
+        type === clip.UNION ? e.inOutOther : false;
 }
 
 function handleIntersections(queue, e1, e2) {
@@ -170,6 +170,7 @@ function subdivideEdge(queue, e, p) {
 
     e.other = e1;
     e1.other = e;
+
     e2.other = e3;
     e3.other = e2;
 
@@ -177,35 +178,36 @@ function subdivideEdge(queue, e, p) {
     queue.push(e2);
 }
 
-function equals(a, b) {
-    var dx = b[0] - a[0],
-        dy = b[1] - a[1];
-    return dx * dx + dy * dy < sqrEpsilon;
-}
-
 function sweepEvent(p, isSubject) {
     return {
         p: p,
-        other: null,
-        left: false,
-        subject: isSubject,
-        inOut: false,
-        otherInOut: false,
-        inResult: false,
         prev: null,
-        next: null
+        next: null,
+        other: null,
+        subject: isSubject,
+        left: false,
+        inOut: false,
+        inOutOther: false,
+        inResult: false
     };
 }
 
 function compareEvent(a, b) {
     return (a.p[0] - b.p[0]) || (a.p[1] - b.p[1]) || (a.left === b.left ? below(a, b.other.p) : a.left ? 1 : -1);
 }
+
 function compareEdge(a, b) {
     return equals(a.p, b.p) ? below(a, b.other.p) : -below(b, a.p);
 }
 
 function below(e, p) {
     return e.left ? area(e.p, e.other.p, p) : area(e.other.p, e.p, p);
+}
+
+function equals(a, b) {
+    var dx = b[0] - a[0],
+        dy = b[1] - a[1];
+    return dx * dx + dy * dy < sqrEpsilon;
 }
 
 function area(a, b, c) {
@@ -215,4 +217,3 @@ function area(a, b, c) {
         bcy = b[1] - c[1];
     return acx * bcy - acy * bcx;
 }
-
