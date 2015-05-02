@@ -1,0 +1,22 @@
+{
+  "name": "polyclip",
+  "version": "1.0.0",
+  "description": "Fast and robust polygon boolean operations",
+  "main": "polyclip.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mapbox/polyclip.git"
+  },
+  "author": "Vladimir Agafonkin",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mapbox/polyclip/issues"
+  },
+  "homepage": "https://github.com/mapbox/polyclip",
+  "dependencies": {
+    "tinyqueue": "^1.0.1"
+  }
+}
