@@ -4,12 +4,21 @@
   "description": "Fast and robust polygon boolean operations",
   "main": "polyclip.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "eslint polyclip.js",
+    "watch": "watchify polyclip.js -s polyclip -v -o viz/clip.js"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/mapbox/polyclip.git"
   },
+  "keywords": [
+    "polygon",
+    "boolean",
+    "geometry",
+    "clipping",
+    "union",
+    "intersection"
+  ],
   "author": "Vladimir Agafonkin",
   "license": "ISC",
   "bugs": {
@@ -18,5 +27,8 @@
   "homepage": "https://github.com/mapbox/polyclip",
   "dependencies": {
     "tinyqueue": "^1.0.1"
+  },
+  "devDependencies": {
+    "eslint": "^0.20.0"
   }
 }

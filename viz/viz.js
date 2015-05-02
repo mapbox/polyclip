@@ -1,6 +1,4 @@
 
-module.exports = DebugViz;
-
 function DebugViz(id, options) {
     var canvas = this.canvas = document.getElementById(id);
     var ctx = this.ctx = canvas.getContext('2d');
