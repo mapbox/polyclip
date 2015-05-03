@@ -218,7 +218,7 @@ function compareEvent(a, b) {
 }
 
 function compareEdge(a, b) {
-    return equals(a.p, b.p) ? below(a, b.other.p) : -below(b, a.p);
+    return (equals(a.p, b.p) ? below(a, b.other.p) : -below(b, a.p)) || 1;
 }
 
 function below(e, p) {
