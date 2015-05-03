@@ -9,6 +9,11 @@ var sqrEpsilon = 1e-10;
 clip.INTERSECTION = 0;
 clip.UNION = 1;
 
+var EDGE_NORMAL = 0,
+    EDGE_NON_CONTRIBUTING = 1,
+    EDGE_SAME_TRANSITION = 2,
+    EDGE_DIFFERENT_TRANSITION = 3;
+
 function clip(subject, clipping, type) {
     var events = [],
         result = [],
@@ -35,11 +40,16 @@ function clip(subject, clipping, type) {
         } else {
             e = e.other;
 
+            var inResult =
+                e.type === EDGE_NON_CONTRIBUTING ? false :
+                type === clip.INTERSECTION ? e.inside || e.type === EDGE_SAME_TRANSITION :
+                type === clip.UNION ? !e.inside || e.type === EDGE_SAME_TRANSITION : false;
+
+            if (inResult) result.push([e.p, e.other.p]);
+
             edgeList = edgeListRemove(edgeList, e);
 
             handleIntersections(queue, e.prev, e.next);
-
-            if (e.inResult) result.push([e.p, e.other.p]);
         }
     }
 
@@ -99,23 +109,19 @@ function addToEvents(events, ring, isSubject) {
     }
 }
 
-function setFlags(e, e0, type) {
+function setFlags(e, e0) {
     if (!e0) {
         e.inOut = false;
-        e.inOutOther = true;
+        e.inside = false;
 
     } else if (e.subject === e0.subject) {
         e.inOut = !e0.inOut;
-        e.inOutOther = e0.inOutOther;
+        e.inside = e0.inside;
 
     } else {
-        e.inOut = !e0.inOutOther;
-        e.inOutOther = e0.inOut;
+        e.inOut = e0.inside;
+        e.inside = !e0.inOut;
     }
-
-    e.inResult =
-        type === clip.INTERSECTION ? !e.inOutOther :
-        type === clip.UNION ? e.inOutOther : false;
 }
 
 function handleIntersections(queue, e1, e2) {
@@ -124,9 +130,9 @@ function handleIntersections(queue, e1, e2) {
     var p0 = e1.p,
         p0b = e1.other.p,
         p1 = e2.p,
-        p1b = e2.other.p;
+        p1b = e2.other.p,
 
-    var ex = p1[0] - p0[0],
+        ex = p1[0] - p0[0],
         ey = p1[1] - p0[1],
         d0x = p0b[0] - p0[0],
         d0y = p0b[1] - p0[1],
@@ -134,8 +140,7 @@ function handleIntersections(queue, e1, e2) {
         d1y = p1b[1] - p1[1],
         cross = d0x * d1y - d0y * d1x,
         sqrLen0 = d0x * d0x + d0y * d0y,
-        sqrLen1 = d1x * d1x + d1y * d1y,
-        p;
+        sqrLen1 = d1x * d1x + d1y * d1y;
 
     if (cross * cross > sqrEpsilon * sqrLen0 * sqrLen1) {
         // lines are not parallel
@@ -145,20 +150,36 @@ function handleIntersections(queue, e1, e2) {
         var t = (ex * d0y - ey * d0x) / cross;
         if (t < 0 || t > 1) return;
 
-        p = [p0[0] + s * d0x, p0[1] + s * d0y];
+        var p = [p0[0] + s * d0x, p0[1] + s * d0y];
 
         if (!equals(p, p0) && !equals(p, p0b)) subdivideEdge(queue, e1, p);
         if (!equals(p, p1) && !equals(p, p1b)) subdivideEdge(queue, e2, p);
-
+        return;
     }
 
     // lines are parallel
     var sqrLenE = ex * ex + ey * ey;
     cross = ex * d0y - ey * d0x;
-    if (cross * cross > sqrEpsilon * sqrLen0 * sqrLenE) return;
+    if (cross * cross > sqrEpsilon * sqrLen0 * sqrLenE) return; // lines are different
+
+    // lines are colinear
+    var s0 = (d0x * ex + d0y * ey) / sqrLen0,
+        s1 = s0 + (d0x * d1x + d0y * d1y) / sqrLen0;
+
+    if (s0 >= 1 || s1 <= 0) return; // no overlap
 
     // lines overlap
-    // TODO
+    if (s0 === 0) {
+        if (s1 > 1) subdivideEdge(queue, e2, p0b); // e2 is longer
+        else if (s1 < 1) subdivideEdge(queue, e1, p1b); // e1 is longer
+
+        e1.type = EDGE_NON_CONTRIBUTING;
+        e2.type = e1.inOut === e2.inOut ? EDGE_SAME_TRANSITION : EDGE_DIFFERENT_TRANSITION;
+    } else {
+        console.log('overlapping case not handled:');
+        console.log(p0, p0b, p1, p1b);
+        console.log(s0, s1);
+    }
 }
 
 function subdivideEdge(queue, e, p) {
@@ -187,8 +208,8 @@ function sweepEvent(p, isSubject) {
         subject: isSubject,
         left: false,
         inOut: false,
-        inOutOther: false,
-        inResult: false
+        inside: false,
+        type: EDGE_NORMAL
     };
 }
 
