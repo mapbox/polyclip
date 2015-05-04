@@ -127,58 +127,61 @@ function setFlags(e, e0) {
 function handleIntersections(queue, e1, e2) {
     if (!e1 || !e2) return;
 
-    var p0 = e1.p,
-        p0b = e1.other.p,
-        p1 = e2.p,
-        p1b = e2.other.p,
+    var p1 = e1.p,
+        p1b = e1.other.p,
+        p2 = e2.p,
+        p2b = e2.other.p,
 
-        ex = p1[0] - p0[0],
-        ey = p1[1] - p0[1],
-        d0x = p0b[0] - p0[0],
-        d0y = p0b[1] - p0[1],
+        ex = p2[0] - p1[0],
+        ey = p2[1] - p1[1],
         d1x = p1b[0] - p1[0],
         d1y = p1b[1] - p1[1],
-        cross = d0x * d1y - d0y * d1x,
-        sqrLen0 = d0x * d0x + d0y * d0y,
-        sqrLen1 = d1x * d1x + d1y * d1y;
+        d2x = p2b[0] - p2[0],
+        d2y = p2b[1] - p2[1],
+        cross = d1x * d2y - d1y * d2x,
+        sqrLen0 = d1x * d1x + d1y * d1y,
+        sqrLen1 = d2x * d2x + d2y * d2y;
 
     if (cross * cross > sqrEpsilon * sqrLen0 * sqrLen1) {
         // lines are not parallel
-        var s = (ex * d1y - ey * d1x) / cross;
+        var s = (ex * d2y - ey * d2x) / cross;
         if (s < 0 || s > 1) return;
 
-        var t = (ex * d0y - ey * d0x) / cross;
+        var t = (ex * d1y - ey * d1x) / cross;
         if (t < 0 || t > 1) return;
 
-        var p = [p0[0] + s * d0x, p0[1] + s * d0y];
+        var p = [p1[0] + s * d1x, p1[1] + s * d1y];
 
-        if (!equals(p, p0) && !equals(p, p0b)) subdivideEdge(queue, e1, p);
-        if (!equals(p, p1) && !equals(p, p1b)) subdivideEdge(queue, e2, p);
+        if (!equals(p, p1) && !equals(p, p1b)) subdivideEdge(queue, e1, p);
+        if (!equals(p, p2) && !equals(p, p2b)) subdivideEdge(queue, e2, p);
         return;
     }
 
     // lines are parallel
     var sqrLenE = ex * ex + ey * ey;
-    cross = ex * d0y - ey * d0x;
+    cross = ex * d1y - ey * d1x;
     if (cross * cross > sqrEpsilon * sqrLen0 * sqrLenE) return; // lines are different
 
+    if (e1.subject === e2.subject) return;
+
     // lines are colinear
-    var s0 = (d0x * ex + d0y * ey) / sqrLen0,
-        s1 = s0 + (d0x * d1x + d0y * d1y) / sqrLen0;
+    var s0 = (d1x * ex + d1y * ey) / sqrLen0,
+        s1 = s0 + (d1x * d2x + d1y * d2y) / sqrLen0;
 
     if (s0 >= 1 || s1 <= 0) return; // no overlap
 
     // lines overlap
-    if (s0 === 0) {
-        if (s1 > 1) subdivideEdge(queue, e2, p0b); // e2 is longer
-        else if (s1 < 1) subdivideEdge(queue, e1, p1b); // e1 is longer
+    if (s0 <= 0) {
+        var e3 = s0 < 0 ? subdivideEdge(queue, e2, p1) : e2;
 
         e1.type = EDGE_NON_CONTRIBUTING;
-        e2.type = e1.inOut === e2.inOut ? EDGE_SAME_TRANSITION : EDGE_DIFFERENT_TRANSITION;
+        e3.type = e1.inOut === e2.inOut ? EDGE_SAME_TRANSITION : EDGE_DIFFERENT_TRANSITION;
+
+        if (s1 < 1) subdivideEdge(queue, e1, p2b);
+        else if (s1 > 1) subdivideEdge(queue, e3, p1b);
+
     } else {
-        console.log('overlapping case not handled:');
-        console.log(p0, p0b, p1, p1b);
-        console.log(s0, s1);
+        console.log('unhandled overlap', p1, p1b, p2, p2b, s0, s1);
     }
 }
 
@@ -197,6 +200,8 @@ function subdivideEdge(queue, e, p) {
 
     queue.push(e1);
     queue.push(e2);
+
+    return e2;
 }
 
 function sweepEvent(p, isSubject) {
