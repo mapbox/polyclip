@@ -223,11 +223,11 @@ function compareEvent(a, b) {
 }
 
 function compareEdge(a, b) {
-    return (equals(a.p, b.p) ? below(a, b.other.p) : -below(b, a.p)) || 1;
+    return equals(a.p, b.p) ? below(a, b.other.p) : -below(b, a.p);
 }
 
 function below(e, p) {
-    return e.left ? area(e.p, e.other.p, p) : area(e.other.p, e.p, p);
+    return e.left ? orient(e.p, e.other.p, p) : orient(e.other.p, e.p, p);
 }
 
 function equals(a, b) {
@@ -236,10 +236,10 @@ function equals(a, b) {
     return dx * dx + dy * dy < sqrEpsilon;
 }
 
-function area(a, b, c) {
+function orient(a, b, c) {
     var acx = a[0] - c[0],
         bcx = b[0] - c[0],
         acy = a[1] - c[1],
         bcy = b[1] - c[1];
-    return acx * bcy - acy * bcx;
+    return acx * bcy - acy * bcx >= 0 ? 1 : -1;
 }
