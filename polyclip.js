@@ -16,6 +16,7 @@ var EDGE_NORMAL = 0,
 
 function clip(subject, clipping, type) {
     var events = [],
+        sortedEvents = [],
         result = [],
         i, e, edgeList;
 
@@ -28,32 +29,90 @@ function clip(subject, clipping, type) {
 
     while (queue.length) {
         e = queue.pop();
+        sortedEvents.push(e);
 
         if (e.left) {
             edgeList = edgeListInsert(edgeList, e);
 
             setFlags(e, e.prev, type);
 
-            handleIntersections(queue, e, e.next);
-            handleIntersections(queue, e, e.prev);
+            handleIntersections(queue, e, e.next, type);
+            handleIntersections(queue, e, e.prev, type);
 
         } else {
-            e = e.other;
+            edgeList = edgeListRemove(edgeList, e.other);
 
-            var inResult =
-                e.type === EDGE_NON_CONTRIBUTING ? false :
-                type === clip.INTERSECTION ? e.inside || e.type === EDGE_SAME_TRANSITION :
-                type === clip.UNION ? !e.inside || e.type === EDGE_SAME_TRANSITION : false;
-
-            if (inResult) result.push([e.p, e.other.p]);
-
-            edgeList = edgeListRemove(edgeList, e);
-
-            handleIntersections(queue, e.prev, e.next);
+            handleIntersections(queue, e.other.prev, e.other.next, type);
         }
     }
 
+    return computeContours(sortedEvents);
+    // return result;
+}
+
+function computeContours(sortedEvents) {
+    var result = [],
+        events = [];
+
+    for (var i = 0; i < sortedEvents.length; i++) {
+        var e = sortedEvents[i];
+        if (e.left ? e.inResult : e.other.inResult) {
+            e.pos = events.length;
+            events.push(e);
+            result.push([e.p, e.other.p]);
+        }
+    }
+
+    console.log(events.map(function (e) {
+        return e.p[0] + ':' + e.p[1] + ' ' + e.pos + '->' + e.other.pos;
+    }));
+
+    // return result;
+
+    for (var i = 0; i < events.length; i++) {
+        var e = events[i];
+        if (!events[i].processed) {
+            result.push(computeContour(events, events[i]));
+        }
+    }
+
+    console.log(JSON.stringify(result));
+
     return result;
+}
+
+function computeContour(events, e) {
+    var contour = [e.p],
+        current = e.other;
+
+    e.processed = true;
+    current.processed = true;
+
+    var k = 0;
+
+    while (!equals(current.p, e.p)) {
+        contour.push(current.p);
+        k++;
+
+        var prev = events[current.pos - 1];
+        var next = events[current.pos + 1];
+        if (prev && equals(prev.p, current.p)) current = prev;
+        else if (next && equals(next.p, current.p)) current = next;
+
+        // if (current.processed) break;
+
+        current.processed = true;
+
+        current = current.other;
+        // if (current.processed) break;
+        current.processed = true;
+
+        if (k >= 1000) break;
+    }
+
+    contour.push(current.p);
+
+    return contour;
 }
 
 function edgeListInsert(edgeList, e) {
@@ -109,7 +168,7 @@ function addToEvents(events, ring, isSubject) {
     }
 }
 
-function setFlags(e, e0) {
+function setFlags(e, e0, type) {
     if (!e0) {
         e.inOut = false;
         e.inside = false;
@@ -122,9 +181,13 @@ function setFlags(e, e0) {
         e.inOut = e0.inside;
         e.inside = !e0.inOut;
     }
+
+    e.inResult =
+        type === clip.INTERSECTION ? e.inside :
+        type === clip.UNION ? !e.inside : false;
 }
 
-function handleIntersections(queue, e1, e2) {
+function handleIntersections(queue, e1, e2, type) {
     if (!e1 || !e2) return;
 
     var p1 = e1.p,
@@ -170,12 +233,17 @@ function handleIntersections(queue, e1, e2) {
 
     if (s0 >= 1 || s1 <= 0) return; // no overlap
 
+    return;
+
     // lines overlap
     if (s0 <= 0) {
         var e3 = s0 < 0 ? subdivideEdge(queue, e2, p1) : e2;
 
-        e1.type = EDGE_NON_CONTRIBUTING;
-        e3.type = e1.inOut === e2.inOut ? EDGE_SAME_TRANSITION : EDGE_DIFFERENT_TRANSITION;
+        e1.inResult =
+            type === clip.INTERSECTION || type === clip.UNION ? e1.inOut === e2.inOut : false;
+        e3.inResult = false;
+        // e1.type = EDGE_NON_CONTRIBUTING;
+        // e3.type = e1.inOut === e2.inOut ? EDGE_SAME_TRANSITION : EDGE_DIFFERENT_TRANSITION;
 
         if (s1 < 1) subdivideEdge(queue, e1, p2b);
         else if (s1 > 1) subdivideEdge(queue, e3, p1b);
@@ -214,12 +282,14 @@ function sweepEvent(p, isSubject) {
         left: false,
         inOut: false,
         inside: false,
-        type: EDGE_NORMAL
+        type: EDGE_NORMAL,
+        pos: null,
+        processed: false
     };
 }
 
 function compareEvent(a, b) {
-    return (a.p[0] - b.p[0]) || (a.p[1] - b.p[1]) || (a.left === b.left ? below(a, b.other.p) : a.left ? 1 : -1);
+    return (a.p[0] - b.p[0]) || (b.p[1] - a.p[1]) || (a.left === b.left ? below(a, b.other.p) : a.left ? 1 : -1);
 }
 
 function compareEdge(a, b) {
