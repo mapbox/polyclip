@@ -46,8 +46,18 @@ function clip(subject, clipping, type) {
         }
     }
 
+    sortEvents(sortedEvents);
+
     return computeContours(sortedEvents);
     // return result;
+}
+
+function sortEvents(events) {
+   for (var i = 0, j; i < events.length; i++) {
+      var value = events[i];
+      for (j = i - 1; j >= 0 && compareEvent(events[j], value) > 0; j--) events[j + 1] = events[j];
+      events[j + 1] = value;
+   }
 }
 
 function computeContours(sortedEvents) {
@@ -63,16 +73,19 @@ function computeContours(sortedEvents) {
         }
     }
 
-    console.log(events.map(function (e) {
-        return e.p[0] + ':' + e.p[1] + ' ' + e.pos + '->' + e.other.pos;
-    }));
+    // console.log(events.map(function (e) {
+    //     return e.p[0] + ':' + e.p[1] + ' ' + e.pos + '->' + e.other.pos;
+    // }));
 
     // return result;
 
     for (var i = 0; i < events.length; i++) {
         var e = events[i];
         if (!events[i].processed) {
-            result.push(computeContour(events, events[i]));
+            var contour = computeContour(events, events[i]);
+            if (contour.length <= 2) continue;
+            // if (contour.length > ) continue;
+            result.push(contour);
         }
     }
 
@@ -96,8 +109,8 @@ function computeContour(events, e) {
 
         var prev = events[current.pos - 1];
         var next = events[current.pos + 1];
-        if (prev && equals(prev.p, current.p)) current = prev;
-        else if (next && equals(next.p, current.p)) current = next;
+        if (next && equals(next.p, current.p)) current = next;
+        else if (prev && equals(prev.p, current.p)) current = prev;
 
         // if (current.processed) break;
 
@@ -106,8 +119,6 @@ function computeContour(events, e) {
         current = current.other;
         // if (current.processed) break;
         current.processed = true;
-
-        if (k >= 1000) break;
     }
 
     contour.push(current.p);
@@ -289,13 +300,19 @@ function sweepEvent(p, isSubject) {
 }
 
 function compareEvent(a, b) {
-    return (a.p[0] - b.p[0]) || (b.p[1] - a.p[1]) || (a.left === b.left ? below(a, b.other.p) : a.left ? 1 : -1);
+    return (a.p[0] - b.p[0]) ||
+           (a.p[1] - b.p[1]) ||
+           (a.left !== b.left && (a.left ? 1 : -1)) ||
+           -below(a, b.other.p) ||
+           (a.subject !== b.subject && (a.subject ? -1 : 1)) || 0;
 }
 
 function compareEdge(a, b) {
-    return equals(a.p, b.p) ? below(a, b.other.p) : -below(b, a.p);
+    return orient(a.p, a.other.p, b.p) === 0 && orient(a.p, a.other.p, b.other.p) === 0 ? compareEvent(a, b) :
+           equals(a.p, b.p) ? -below(a, b.other.p) :
+           a.p[0] === b.p[0] ? a.p[1] - b.p[1] :
+           compareEvent(a, b) > 0 ? below(b, a.p) : -below(a, b.p);
 }
-
 function below(e, p) {
     return e.left ? orient(e.p, e.other.p, p) : orient(e.other.p, e.p, p);
 }
